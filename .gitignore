@@ -1,1 +1,4 @@
 .DS_Store
+
+# Isolated git worktrees used by background agents
+.claude/worktrees/
