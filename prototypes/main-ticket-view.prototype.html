@@ -1,0 +1,523 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway. Not production code.
+
+  Question it answers: wayfinder ticket #4, "Prototype the main ticket view".
+  Three variants of Project-View's main screen, switchable via ?variant=,
+  plus a data-mode switch (?data=) because the real project currently has
+  empty Frontier and Done columns, and the ticket asks what happens at 200 issues.
+
+  Deliberately NOT answered here: anything computing "project status" — that is
+  ticket #8. No health score, no percent-complete, no burndown.
+
+  Open by double-clicking. No build, no server, no network.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project-View — main view prototype</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #fbfbfd;
+    --ink: #1a1d21;
+    --ink-2: #5c636e;
+    --ink-3: #8b93a1;
+    --line: #e2e5ea;
+    --line-2: #d0d5dd;
+    --accent: #4338ca;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --radius: 8px;
+
+    --t-research: #0e7490;   --t-research-bg: #cffafe;
+    --t-prototype: #9d174d;  --t-prototype-bg: #fce7f3;
+    --t-insighting: #1d4ed8; --t-insighting-bg: #dbeafe;
+    --t-task: #3f6212;       --t-task-bg: #ecfccb;
+    --t-map: #6d28d9;        --t-map-bg: #ede9fe;
+
+    --s-frontier: #067647;   --s-frontier-bg: #d1fadf;
+    --s-claimed: #b54708;    --s-claimed-bg: #fef0c7;
+    --s-blocked: #667085;    --s-blocked-bg: #eaecf0;
+    --s-done: #475467;       --s-done-bg: #f2f4f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1116;
+      --panel: #161b22;
+      --panel-2: #1b2129;
+      --ink: #e6edf3;
+      --ink-2: #9aa4b2;
+      --ink-3: #6e7781;
+      --line: #262c36;
+      --line-2: #333b47;
+      --accent: #a5b4fc;
+      --shadow: 0 1px 2px rgba(0,0,0,.4);
+
+      --t-research: #67e8f9;   --t-research-bg: #164e63;
+      --t-prototype: #fbcfe8;  --t-prototype-bg: #831843;
+      --t-insighting: #bfdbfe; --t-insighting-bg: #1e3a8a;
+      --t-task: #d9f99d;       --t-task-bg: #365314;
+      --t-map: #ddd6fe;        --t-map-bg: #4c1d95;
+
+      --s-frontier: #6ce9a6;   --s-frontier-bg: #05603a;
+      --s-claimed: #fedf89;    --s-claimed-bg: #93370d;
+      --s-blocked: #98a2b3;    --s-blocked-bg: #1d2939;
+      --s-done: #98a2b3;       --s-done-bg: #1d2939;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 92px;
+  }
+  h1,h2,h3,h4 { margin: 0; font-weight: 600; }
+  a { color: inherit; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 600; letter-spacing: .01em;
+    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .num { font-variant-numeric: tabular-nums; color: var(--ink-3); font-weight: 600; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ── shared app chrome ────────────────────────────────────────── */
+  .chrome {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    background: var(--panel); position: sticky; top: 0; z-index: 20;
+  }
+  .chrome .repo { font-weight: 650; font-size: 14px; }
+  .chrome .sep { color: var(--ink-3); }
+  .chrome .dest { color: var(--ink-2); font-size: 13px; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chrome .count { color: var(--ink-3); font-size: 12px; }
+
+  /* ── VARIANT A · Kanban ───────────────────────────────────────── */
+  .kb-wrap { padding: 16px 20px; }
+  .kb-mapcard {
+    background: linear-gradient(180deg, var(--t-map-bg), var(--panel));
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 16px;
+  }
+  .kb-mapcard h2 { font-size: 15px; margin-bottom: 4px; }
+  .kb-mapcard p { margin: 0; color: var(--ink-2); font-size: 13px; }
+  .kb-cols { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 14px; }
+  .kb-col { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); min-height: 220px; display: flex; flex-direction: column; }
+  .kb-colhead {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid var(--line);
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .kb-colhead .n { background: var(--line); color: var(--ink-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+  .kb-cards { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; max-height: calc(100vh - 320px); }
+  .kb-card {
+    background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px;
+    padding: 10px 11px; box-shadow: var(--shadow); cursor: default;
+  }
+  .kb-card:hover { border-color: var(--accent); }
+  .kb-card .top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .kb-card .title { font-size: 13px; font-weight: 550; line-height: 1.35; margin-bottom: 8px; }
+  .kb-card .foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .kb-empty { color: var(--ink-3); font-size: 12px; font-style: italic; padding: 16px 12px; text-align: center; }
+  .who { width: 20px; height: 20px; border-radius: 999px; background: var(--accent); color: #fff;
+    font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+  @media (prefers-color-scheme: dark) { .who { color: #0e1116; } }
+  .blockchip { font-size: 11px; color: var(--s-blocked); background: var(--s-blocked-bg); border-radius: 4px; padding: 1px 6px; }
+
+  /* ── VARIANT B · Route map (graph) ────────────────────────────── */
+  .gr-wrap { padding: 18px 20px; }
+  .gr-legend { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; color: var(--ink-2); font-size: 12px; }
+  .gr-canvas { position: relative; overflow: auto; border: 1px solid var(--line);
+    border-radius: var(--radius); background:
+      radial-gradient(circle at 1px 1px, var(--line) 1px, transparent 0) 0 0/22px 22px, var(--panel); }
+  .gr-inner { position: relative; }
+  .gr-node {
+    position: absolute; width: 190px; background: var(--panel);
+    border: 1.5px solid var(--line-2); border-radius: 7px; padding: 8px 10px;
+    box-shadow: var(--shadow);
+  }
+  .gr-node.frontier { border-color: var(--s-frontier); box-shadow: 0 0 0 3px var(--s-frontier-bg); }
+  .gr-node.claimed  { border-color: var(--s-claimed); }
+  .gr-node.done     { opacity: .5; }
+  .gr-node .t { font-size: 12px; font-weight: 560; line-height: 1.3; margin: 5px 0 6px; }
+  .gr-layerlab { position: absolute; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--ink-3); }
+  svg.gr-edges { position: absolute; inset: 0; pointer-events: none; }
+
+  /* ── VARIANT C · Agenda ───────────────────────────────────────── */
+  .ag-wrap { max-width: 860px; margin: 0 auto; padding: 26px 20px; }
+  .ag-now { border: 1px solid var(--line-2); border-left: 4px solid var(--s-frontier);
+    background: var(--panel); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .ag-now .kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--s-frontier); margin-bottom: 8px; }
+  .ag-now h2 { font-size: 20px; line-height: 1.25; margin-bottom: 8px; }
+  .ag-now .why { color: var(--ink-2); font-size: 13px; margin: 0 0 12px; }
+  .ag-none { border-left-color: var(--s-claimed); }
+  .ag-none .kicker { color: var(--s-claimed); }
+  .ag-group { margin-top: 26px; }
+  .ag-grouphead { display: flex; align-items: baseline; gap: 8px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .ag-row { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .ag-row:hover { background: var(--panel-2); }
+  .ag-row .t { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ag-row.dim { opacity: .55; }
+  .ag-row.dim .t { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+  .ag-meta { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+
+  /* ── switcher (deliberately ugly — not part of the design) ────── */
+  .switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; z-index: 100;
+    background: #111827; color: #f9fafb; border-radius: 999px;
+    padding: 6px 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    font: 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  .switcher button {
+    background: #1f2937; color: #f9fafb; border: 0; border-radius: 999px;
+    padding: 7px 11px; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .switcher button:hover { background: #374151; }
+  .switcher .lab { padding: 0 10px; font-weight: 700; min-width: 168px; text-align: center; }
+  .switcher .div { width: 1px; height: 20px; background: #374151; margin: 0 4px; }
+  .switcher .seg { display: flex; gap: 3px; }
+  .switcher .seg button.on { background: #6366f1; }
+  .switcher .hint { color: #9ca3af; padding-left: 6px; padding-right: 4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="switcher" id="switcher"></div>
+
+<script>
+/* ══ DATA ══════════════════════════════════════════════════════════
+   "now"   — the real state of SparksCDN/Project-View, read 2026-08-12.
+   "later" — same map, plausibly advanced, so Frontier and Done aren't empty.
+   "scale" — a synthetic ~80-ticket project, to test density.
+   ═════════════════════════════════════════════════════════════════ */
+
+const DESTINATION = "A spec for a read-only, skills-aware desktop app showing one project's GitHub tickets.";
+
+const NOW = {
+  repo: "SparksCDN/Project-View",
+  map: { number: 1, title: "Map: Project-View spec" },
+  tickets: [
+    { number:2, title:"Survey cross-platform desktop app stacks",        type:"research",   state:"open", assignee:"SparksCDN", blockedBy:[] },
+    { number:3, title:"Survey GitHub's issue APIs for a read-only client", type:"research",  state:"open", assignee:"SparksCDN", blockedBy:[] },
+    { number:4, title:"Prototype the main ticket view",                  type:"prototype",  state:"open", assignee:"SparksCDN", blockedBy:[] },
+    { number:5, title:"Choose the desktop stack",                        type:"insighting", state:"open", assignee:null, blockedBy:[2] },
+    { number:6, title:"Decide how the app authenticates to GitHub",      type:"insighting", state:"open", assignee:null, blockedBy:[3] },
+    { number:7, title:"Decide which skill artifacts the app renders",    type:"insighting", state:"open", assignee:null, blockedBy:[3,4] },
+    { number:8, title:'Define what "project status" means',              type:"insighting", state:"open", assignee:null, blockedBy:[4,7] },
+  ]
+};
+
+const LATER = {
+  repo: "SparksCDN/Project-View",
+  map: { number: 1, title: "Map: Project-View spec" },
+  tickets: [
+    { number:2, title:"Survey cross-platform desktop app stacks",        type:"research",   state:"closed", assignee:"SparksCDN", blockedBy:[] },
+    { number:3, title:"Survey GitHub's issue APIs for a read-only client", type:"research",  state:"closed", assignee:"SparksCDN", blockedBy:[] },
+    { number:4, title:"Prototype the main ticket view",                  type:"prototype",  state:"closed", assignee:"SparksCDN", blockedBy:[] },
+    { number:5, title:"Choose the desktop stack",                        type:"insighting", state:"open",   assignee:null, blockedBy:[2] },
+    { number:6, title:"Decide how the app authenticates to GitHub",      type:"insighting", state:"open",   assignee:"SparksCDN", blockedBy:[3] },
+    { number:7, title:"Decide which skill artifacts the app renders",    type:"insighting", state:"open",   assignee:null, blockedBy:[3,4] },
+    { number:8, title:'Define what "project status" means',              type:"insighting", state:"open",   assignee:null, blockedBy:[4,7] },
+    { number:9, title:"Define the local markdown ticket schema",         type:"insighting", state:"open",   assignee:null, blockedBy:[7] },
+    { number:10, title:"Decide the caching and refresh strategy",        type:"insighting", state:"open",   assignee:null, blockedBy:[5,6] },
+  ]
+};
+
+function makeScale() {
+  const types = ["research","prototype","insighting","task"];
+  const verbs = ["Decide","Survey","Prototype","Define","Choose","Evaluate","Specify","Investigate"];
+  const nouns = ["the sync loop","label rendering","the settings pane","offline cache","the diff view",
+    "keyboard shortcuts","the source adapter","error states","the empty state","token refresh",
+    "column ordering","the detail drawer","search indexing","theme handling","window state",
+    "the update channel","crash reporting","the onboarding flow","filter persistence","board density"];
+  const tickets = [];
+  let n = 2;
+  for (let i = 0; i < 78; i++, n++) {
+    const closed = i < 26;
+    const claimed = !closed && i < 32;
+    const blockedBy = (i > 8 && i % 3 === 0) ? [2 + ((i * 7) % Math.max(1, i - 4))] : [];
+    tickets.push({
+      number: n,
+      title: `${verbs[i % verbs.length]} ${nouns[(i * 3) % nouns.length]}`,
+      type: types[i % types.length],
+      state: closed ? "closed" : "open",
+      assignee: (closed || claimed) ? "SparksCDN" : null,
+      blockedBy: closed ? [] : blockedBy,
+    });
+  }
+  return { repo: "SparksCDN/Big-Project", map: { number: 1, title: "Map: a much larger effort" }, tickets };
+}
+const SCALE = makeScale();
+
+const DATASETS = { now: NOW, later: LATER, scale: SCALE };
+
+/* ══ DERIVED STATE ═════════════════════════════════════════════════
+   The wayfinder state machine, computed — not stored on the issue.
+   done     : closed
+   blocked  : any blocker still open
+   claimed  : unblocked, open, has an assignee
+   frontier : unblocked, open, unassigned  ← the takeable edge
+   ═════════════════════════════════════════════════════════════════ */
+function derive(data) {
+  const byNum = Object.fromEntries(data.tickets.map(t => [t.number, t]));
+  for (const t of data.tickets) {
+    const openBlockers = t.blockedBy.filter(b => byNum[b] && byNum[b].state === "open");
+    t.openBlockers = openBlockers;
+    if (t.state === "closed")            t.status = "done";
+    else if (openBlockers.length > 0)    t.status = "blocked";
+    else if (t.assignee)                 t.status = "claimed";
+    else                                 t.status = "frontier";
+  }
+  return data;
+}
+
+const STATUS_LABEL = { frontier: "Frontier", claimed: "Claimed", blocked: "Blocked", done: "Done" };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const typeBadge = t => `<span class="badge" style="color:var(--t-${t});background:var(--t-${t}-bg)">${t}</span>`;
+const statusBadge = s => `<span class="badge" style="color:var(--s-${s});background:var(--s-${s}-bg)">${STATUS_LABEL[s]}</span>`;
+const initials = a => a ? a.slice(0,2).toUpperCase() : "";
+
+function chrome(d) {
+  const open = d.tickets.filter(t => t.state === "open").length;
+  return `<div class="chrome">
+    <span class="repo">${esc(d.repo)}</span>
+    <span class="sep">/</span>
+    <span class="dest">${esc(DESTINATION)}</span>
+    <span class="count">${open} open · ${d.tickets.length - open} closed</span>
+  </div>`;
+}
+
+/* ══ VARIANT A · Kanban board ══════════════════════════════════════
+   The JIRA-shaped answer. Columns are the wayfinder state machine,
+   NOT the triage labels (which this project doesn't use).
+   Primary affordance: spatial position tells you what's takeable.
+   ═════════════════════════════════════════════════════════════════ */
+function VariantA(d) {
+  const cols = ["frontier","claimed","blocked","done"];
+  const card = t => `
+    <div class="kb-card">
+      <div class="top"><span class="num mono">#${t.number}</span>${typeBadge(t.type)}</div>
+      <div class="title">${esc(t.title)}</div>
+      <div class="foot">
+        ${t.assignee ? `<span class="who" title="${esc(t.assignee)}">${initials(t.assignee)}</span>` : ""}
+        ${t.openBlockers.length ? `<span class="blockchip">⛔ ${t.openBlockers.map(b=>"#"+b).join(" ")}</span>` : ""}
+      </div>
+    </div>`;
+  return `
+    ${chrome(d)}
+    <div class="kb-wrap">
+      <div class="kb-mapcard">
+        <h2><span class="num mono">#${d.map.number}</span> &nbsp;${esc(d.map.title)}</h2>
+        <p>${esc(DESTINATION)}</p>
+      </div>
+      <div class="kb-cols">
+        ${cols.map(c => {
+          const items = d.tickets.filter(t => t.status === c);
+          return `<div class="kb-col">
+            <div class="kb-colhead"><span>${STATUS_LABEL[c]}</span><span class="n">${items.length}</span></div>
+            <div class="kb-cards">
+              ${items.length ? items.map(card).join("") : `<div class="kb-empty">nothing here</div>`}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
+/* ══ VARIANT B · Route map ═════════════════════════════════════════
+   The map AS A MAP. Tickets are nodes, blocking edges are arrows,
+   layers are "how many decisions deep". Frontier glows.
+   Primary affordance: you can see the shape of the remaining route.
+   This is the view no tracker UI gives you.
+   ═════════════════════════════════════════════════════════════════ */
+function VariantB(d) {
+  const byNum = Object.fromEntries(d.tickets.map(t => [t.number, t]));
+  const depth = {};
+  const calc = (n, seen = new Set()) => {
+    if (depth[n] !== undefined) return depth[n];
+    if (seen.has(n)) return 0;
+    seen.add(n);
+    const t = byNum[n];
+    const ds = (t?.blockedBy || []).filter(b => byNum[b]).map(b => calc(b, seen));
+    return depth[n] = ds.length ? 1 + Math.max(...ds) : 0;
+  };
+  d.tickets.forEach(t => calc(t.number));
+
+  const layers = {};
+  d.tickets.forEach(t => (layers[depth[t.number]] ||= []).push(t));
+  const maxLayer = Math.max(...Object.keys(layers).map(Number));
+
+  const NW = 190, NH = 74, GX = 268, GY = 96, PADX = 28, PADY = 56;
+  const pos = {};
+  Object.entries(layers).forEach(([l, items]) => {
+    items.forEach((t, i) => { pos[t.number] = { x: PADX + Number(l) * GX, y: PADY + i * GY }; });
+  });
+  const height = PADY + Math.max(...Object.values(layers).map(a => a.length)) * GY + 20;
+  const width  = PADX + (maxLayer + 1) * GX + 20;
+
+  const edges = [];
+  d.tickets.forEach(t => t.blockedBy.forEach(b => {
+    if (!pos[b] || !pos[t.number]) return;
+    const from = { x: pos[b].x + NW, y: pos[b].y + NH / 2 };
+    const to   = { x: pos[t.number].x - 7, y: pos[t.number].y + NH / 2 };
+    const mid = (from.x + to.x) / 2;
+    const resolved = byNum[b].state === "closed";
+    edges.push(`<path d="M${from.x},${from.y} C${mid},${from.y} ${mid},${to.y} ${to.x},${to.y}"
+      fill="none" stroke="${resolved ? "var(--s-done)" : "var(--s-blocked)"}"
+      stroke-width="1.8" stroke-dasharray="${resolved ? "4 4" : "0"}" marker-end="url(#arw)" opacity="${resolved ? .4 : .85}"/>`);
+  }));
+
+  const node = t => {
+    const p = pos[t.number];
+    return `<div class="gr-node ${t.status}" style="left:${p.x}px;top:${p.y}px">
+      <div class="top" style="display:flex;gap:6px;align-items:center">
+        <span class="num mono">#${t.number}</span>${typeBadge(t.type)}
+      </div>
+      <div class="t">${esc(t.title)}</div>
+      ${t.status === "frontier" ? statusBadge("frontier")
+        : t.assignee ? `<span class="who" title="${esc(t.assignee)}">${initials(t.assignee)}</span>` : ""}
+    </div>`;
+  };
+
+  return `
+    ${chrome(d)}
+    <div class="gr-wrap">
+      <div class="gr-legend">
+        <strong style="color:var(--ink)">${esc(d.map.title)}</strong>
+        <span>·</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--s-frontier);vertical-align:middle"></span> takeable now</span>
+        <span>→ arrow points from blocker to blocked</span>
+        <span>dashed = blocker resolved</span>
+        <span>column = decisions deep</span>
+      </div>
+      <div class="gr-canvas">
+        <div class="gr-inner" style="width:${width}px;height:${height}px">
+          <svg class="gr-edges" width="${width}" height="${height}">
+            <defs><marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--s-blocked)"/></marker></defs>
+            ${edges.join("")}
+          </svg>
+          ${Object.keys(layers).map(l => `<div class="gr-layerlab" style="left:${PADX + Number(l)*GX}px;top:24px">${Number(l) === 0 ? "takeable" : "depth " + l}</div>`).join("")}
+          ${d.tickets.map(node).join("")}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ══ VARIANT C · Agenda ════════════════════════════════════════════
+   Anti-board. One thing at the top: what to do next. Everything else
+   is a dense list, dimmed and grouped. No columns, no cards.
+   Primary affordance: the app answers a question rather than showing a space.
+   ═════════════════════════════════════════════════════════════════ */
+function VariantC(d) {
+  const frontier = d.tickets.filter(t => t.status === "frontier");
+  const claimed  = d.tickets.filter(t => t.status === "claimed");
+  const blocked  = d.tickets.filter(t => t.status === "blocked");
+  const done     = d.tickets.filter(t => t.status === "done");
+  const next = frontier[0];
+
+  const row = (t, dim) => `
+    <div class="ag-row ${dim ? "dim" : ""}">
+      <span class="num mono">#${t.number}</span>
+      ${typeBadge(t.type)}
+      <span class="t">${esc(t.title)}</span>
+      ${t.openBlockers.length ? `<span class="ag-meta">waiting on ${t.openBlockers.map(b=>"#"+b).join(", ")}</span>` : ""}
+      ${t.assignee && !dim ? `<span class="who" title="${esc(t.assignee)}">${initials(t.assignee)}</span>` : ""}
+    </div>`;
+
+  const group = (name, items, dim) => items.length ? `
+    <div class="ag-group">
+      <div class="ag-grouphead"><span>${name}</span><span>${items.length}</span></div>
+      ${items.map(t => row(t, dim)).join("")}
+    </div>` : "";
+
+  return `
+    ${chrome(d)}
+    <div class="ag-wrap">
+      ${next ? `
+        <div class="ag-now">
+          <div class="kicker">Do this next</div>
+          <h2><span class="num mono">#${next.number}</span> ${esc(next.title)}</h2>
+          <p class="why">Unblocked, unclaimed, and ${
+            d.tickets.filter(t => t.blockedBy.includes(next.number)).length
+          } later ticket(s) wait on it.</p>
+          <div style="display:flex;gap:8px;align-items:center">${typeBadge(next.type)}${statusBadge("frontier")}</div>
+        </div>`
+        : `<div class="ag-now ag-none">
+          <div class="kicker">Nothing takeable</div>
+          <h2>Everything unblocked is already claimed</h2>
+          <p class="why">${claimed.length} ticket(s) in flight. The next decision opens up when one of them closes.</p>
+        </div>`}
+      ${group("In flight", claimed, false)}
+      ${group("Waiting on something", blocked, false)}
+      ${group("Settled", done, true)}
+    </div>`;
+}
+
+/* ══ SWITCHER ══════════════════════════════════════════════════════ */
+const VARIANTS = {
+  A: { name: "Kanban board", fn: VariantA },
+  B: { name: "Route map",    fn: VariantB },
+  C: { name: "Agenda",       fn: VariantC },
+};
+const KEYS = Object.keys(VARIANTS);
+const DATA_KEYS = { now: "Now (real)", later: "Later", scale: "80 tickets" };
+
+function params() {
+  const p = new URLSearchParams(location.search);
+  return {
+    variant: KEYS.includes(p.get("variant")) ? p.get("variant") : "A",
+    data: DATA_KEYS[p.get("data")] ? p.get("data") : "now",
+  };
+}
+function setParams(next) {
+  const p = new URLSearchParams(location.search);
+  Object.entries(next).forEach(([k, v]) => p.set(k, v));
+  history.replaceState(null, "", location.pathname + "?" + p.toString());
+  render();
+}
+function render() {
+  const { variant, data } = params();
+  const raw = JSON.parse(JSON.stringify(DATASETS[data]));
+  document.getElementById("app").innerHTML = VARIANTS[variant].fn(derive(raw));
+  document.getElementById("switcher").innerHTML = `
+    <button data-step="-1">←</button>
+    <span class="lab">${variant} — ${VARIANTS[variant].name}</span>
+    <button data-step="1">→</button>
+    <span class="div"></span>
+    <span class="seg">
+      ${Object.entries(DATA_KEYS).map(([k, label]) =>
+        `<button data-data="${k}" class="${k === data ? "on" : ""}">${label}</button>`).join("")}
+    </span>
+    <span class="hint">← → to switch</span>`;
+  document.querySelectorAll("[data-step]").forEach(b =>
+    b.onclick = () => cycle(Number(b.dataset.step)));
+  document.querySelectorAll("[data-data]").forEach(b =>
+    b.onclick = () => setParams({ data: b.dataset.data }));
+}
+function cycle(step) {
+  const { variant } = params();
+  const i = (KEYS.indexOf(variant) + step + KEYS.length) % KEYS.length;
+  setParams({ variant: KEYS[i] });
+}
+addEventListener("keydown", e => {
+  const el = document.activeElement;
+  if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+render();
+</script>
+</body>
+</html>
